@@ -2,11 +2,15 @@ import asyncio
 import discord
 import schedule
 from discord.ext import commands
+from discord.ext.commands import context
 import logging
 import datetime
 from data import db_session
 from data.reminds import Remind
 
+db_session.global_init("db/reminds.db")
+db_sess = db_session.create_session()
+all_rems = db_sess.query(Remind).all()
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler()
@@ -20,6 +24,36 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 wdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 launched = False
+
+for remind in all_rems:
+    weekday = remind.day
+    hour_minute = remind.time
+    rtext = remind.text
+    ctx = context()
+    ctx.default(channel=remind.channel, bot=bot)
+    if remind.r_type == "weekly":
+
+        if weekday == "mon":
+            schedule.every().monday.at(hour_minute).do(send_ctx, ctx,
+                                                       f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+        elif weekday == "tue":
+            schedule.every().tuesday.at(hour_minute).do(send_ctx, ctx,
+                                                        f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+        elif weekday == "wed":
+            schedule.every().wednesday.at(hour_minute).do(send_ctx, ctx,
+                                                          f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+        elif weekday == "thu":
+            schedule.every().thursday.at(hour_minute).do(send_ctx, ctx,
+                                                         f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+        elif weekday == "fri":
+            schedule.every().friday.at(hour_minute).do(send_ctx, ctx,
+                                                       f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+        elif weekday == "sat":
+            schedule.every().saturday.at(hour_minute).do(send_ctx, ctx,
+                                                         f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+        elif weekday == "sun":
+            schedule.every().sunday.at(hour_minute).do(send_ctx, ctx,
+                                                       f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
 
 def send_ctx(ctx, message):
     asyncio.ensure_future(ctx.send(message))
@@ -61,15 +95,15 @@ async def weekly_remind(ctx, weekday, hour_minute, *rltext):
         schedule.every().sunday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
     await ctx.send(f"Reminder for <@{ctx.message.author.id}> set: {rtext} every {weekday} at {hour_minute}.")
     rem = Remind()
-    rem.type = "weekly"
+    rem.r_type = "weekly"
     rem.day = weekday
     rem.userid = ctx.message.author.id
     rem.time = hour_minute
     rem.text = rtext
-    db_sess = db_session.create_session()
+    rem.channel = ctx.channel_id()
     db_sess.add(rem)
     db_sess.commit()
 
-db_session.global_init("db/reminds.db")
+
 TOKEN = open("token.txt").readline()
 bot.run(TOKEN)
