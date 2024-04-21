@@ -11,7 +11,7 @@ class Remind(SqlAlchemyBase):
     r_type = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     day = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     time = sqlalchemy.Column(sqlalchemy.String, nullable=True)
-    text = sqlalchemy.Column(sqlalchemy.String,
-                              index=True, unique=True, nullable=True)
+    text = sqlalchemy.Column(sqlalchemy.String, unique=False, nullable=True)
     userid = sqlalchemy.Column(sqlalchemy.Integer, nullable=True)
-    channel = sqlalchemy.Column(sqlalchemy.Integer, nullable=True)
+    channel = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+    guild = sqlalchemy.Column(sqlalchemy.String, nullable=True)
