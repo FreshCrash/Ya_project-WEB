@@ -2,7 +2,6 @@ import asyncio
 import discord
 import schedule
 from discord.ext import commands
-from discord.ext.commands import Context
 import logging
 import datetime
 from data import db_session
@@ -26,49 +25,56 @@ wdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 launched = False
 
 rdict = {}
+
+
+def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
+    if r_type == "weekly":
+
+        if weekday == "mon":
+            rdict[rid] = schedule.every().monday.at(hour_minute).do(send_ctx, channel,
+                                                                    f"Reminder for <@{authorid}>: {rtext}!")
+        elif weekday == "tue":
+            rdict[rid] = schedule.every().tuesday.at(hour_minute).do(send_ctx, channel,
+                                                                     f"Reminder for <@{authorid}>: {rtext}!")
+        elif weekday == "wed":
+            rdict[rid] = schedule.every().wednesday.at(hour_minute).do(send_ctx, channel,
+                                                                       f"Reminder for <@{authorid}>: {rtext}!")
+        elif weekday == "thu":
+            rdict[rid] = schedule.every().thursday.at(hour_minute).do(send_ctx, channel,
+                                                                      f"Reminder for <@{authorid}>: {rtext}!")
+        elif weekday == "fri":
+            rdict[rid] = schedule.every().friday.at(hour_minute).do(send_ctx, channel,
+                                                                    f"Reminder for <@{authorid}>: {rtext}!")
+        elif weekday == "sat":
+            rdict[rid] = schedule.every().saturday.at(hour_minute).do(send_ctx, channel,
+                                                                      f"Reminder for <@{authorid}>: {rtext}!")
+        elif weekday == "sun":
+            rdict[rid] = schedule.every().sunday.at(hour_minute).do(send_ctx, channel,
+                                                                    f"Reminder for <@{authorid}>: {rtext}!")
+    elif r_type == "daily":
+        rtext = rtext
+        rdict[rid] = schedule.every().day.at(hour_minute).do(send_ctx, channel,
+                                                             f"Reminder for <@{authorid}>: {rtext}!")
+
+
 def send_ctx(ctx, message):
     asyncio.ensure_future(ctx.send(message))
 
 
 @bot.event
 async def on_ready():
+    global all_rems
     all_rems = db_sess.query(Remind).all()
     for remind in all_rems:
         weekday = remind.day
-        hour_minute = remind.time
         rtext = remind.text
         channel = discord.utils.get(bot.get_all_channels(), guild__name=remind.guild, name=remind.channel)
-        authorid = remind.userid
-        if remind.r_type == "weekly":
-
-            if weekday == "mon":
-                rdict[remind.id] = schedule.every().monday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-            elif weekday == "tue":
-                rdict[remind.id] = schedule.every().tuesday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-            elif weekday == "wed":
-                rdict[remind.id] = schedule.every().wednesday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-            elif weekday == "thu":
-                rdict[remind.id] = schedule.every().thursday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-            elif weekday == "fri":
-                rdict[remind.id] = schedule.every().friday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-            elif weekday == "sat":
-                rdict[remind.id] = schedule.every().saturday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-            elif weekday == "sun":
-                rdict[remind.id] = schedule.every().sunday.at(hour_minute).do(send_ctx, channel,
-                                                           f"Reminder for <@{authorid}>: {rtext}!")
-        elif remind.r_type == "daily":
-            rtext = remind.text
-            rdict[remind.id] = schedule.every().day.at(hour_minute).do(send_ctx, channel, f"Reminder for <@{remind.userid}>: {rtext}!")
+        load_rem(remind.r_type, remind.id, remind.time, remind.userid, rtext, channel, weekday)
     all_rems = db_sess.query(Remind).all()
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
+
 
 @bot.command(name='remind')
 async def new_remind(ctx, day_month, hour_minute, *rltext):
@@ -85,6 +91,7 @@ async def new_remind(ctx, day_month, hour_minute, *rltext):
 
 @bot.command(name="weekly")
 async def weekly_remind(ctx, weekday, hour_minute, *rltext):
+    global all_rems
     rtext = " ".join(rltext)
     rem = Remind()
     rem.r_type = "weekly"
@@ -97,25 +104,14 @@ async def weekly_remind(ctx, weekday, hour_minute, *rltext):
     db_sess.add(rem)
     db_sess.commit()
     all_rems = db_sess.query(Remind).all()
-    remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id)
-    if weekday == "mon":
-        rdict[remind.id] = schedule.every().monday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    elif weekday == "tue":
-        rdict[remind.id] = schedule.every().tuesday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    elif weekday == "wed":
-        rdict[remind.id] = schedule.every().wednesday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    elif weekday == "thu":
-        rdict[remind.id] = schedule.every().thursday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    elif weekday == "fri":
-        rdict[remind.id] = schedule.every().friday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    elif weekday == "sat":
-        rdict[remind.id] = schedule.every().saturday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    elif weekday == "sun":
-        rdict[remind.id] = schedule.every().sunday.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
-    await ctx.send(f"Reminder for <@{ctx.message.author.id}> set: {rtext} every {weekday} at {hour_minute}.")
+    remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id).first()
+    load_rem(remind.r_type, remind.id, remind.time, remind.userid, rtext, ctx.channel, weekday)
+    await ctx.send(f"Reminder for <@{ctx.message.author.id}> set: {rtext} everyday at {hour_minute}.")
+
 
 @bot.command(name="daily")
 async def daily_remind(ctx, hour_minute, *rltext):
+    global all_rems
     rtext = " ".join(rltext)
     rem = Remind()
     rem.r_type = "daily"
@@ -128,10 +124,10 @@ async def daily_remind(ctx, hour_minute, *rltext):
     db_sess.add(rem)
     db_sess.commit()
     all_rems = db_sess.query(Remind).all()
-    remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id)
-    rdict[remind.id] = schedule.every().day.at(hour_minute).do(send_ctx, ctx, f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+    remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id).first()
+    rdict[remind.id] = schedule.every().day.at(hour_minute).do(send_ctx, ctx,
+                                                               f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
     await ctx.send(f"Reminder for <@{ctx.message.author.id}> set: {rtext} everyday at {hour_minute}.")
-
 
 
 
