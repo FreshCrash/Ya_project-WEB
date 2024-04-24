@@ -270,8 +270,9 @@ async def listrems(ctx):
         elif remind.r_type == "daily":
             await ctx.send(f"{remind.text} everyday at {remind.time}. ID = {remind.id}")
         elif remind.r_type == "custom":
+            strtime = time.strftime('%dd, %H:%M:%S', time.gmtime(int(remind.time)))
             await ctx.send(
-                f"{remind.text} every {time.strftime('%dd, %H:%M:%S', time.gmtime(int(remind.time)))}. ID = {remind.id}")
+                f"{remind.text} every {str(int(strtime[:2:]) - 1) + strtime[2::]}. ID = {remind.id}")
 
 
 @bot.command(name="bot_help")
