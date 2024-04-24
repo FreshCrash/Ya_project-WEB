@@ -29,7 +29,7 @@ rep_count = {}
 
 
 def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
-    global all_rems
+    global rdict
     if r_type == "weekly":
 
         if weekday == "mon":
@@ -55,7 +55,7 @@ def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
     elif r_type == "daily":
         day_of_week = schedule.every().day
 
-    all_rems[rid] = day_of_week.at(hour_minute).do(send_ctx, channel, f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+    rdict[rid] = day_of_week.at(hour_minute).do(send_ctx, channel, f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
     logger.debug(f"Loaded remind {rid}")
 
 
