@@ -25,6 +25,7 @@ wdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 launched = False
 
 rdict = {}
+rep_count = {}
 
 
 def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
@@ -32,34 +33,43 @@ def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
 
         if weekday == "mon":
             rdict[rid] = schedule.every().monday.at(hour_minute).do(send_ctx, channel,
-                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
         elif weekday == "tue":
             rdict[rid] = schedule.every().tuesday.at(hour_minute).do(send_ctx, channel,
-                                                                     f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                     f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
         elif weekday == "wed":
             rdict[rid] = schedule.every().wednesday.at(hour_minute).do(send_ctx, channel,
-                                                                       f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                       f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
         elif weekday == "thu":
             rdict[rid] = schedule.every().thursday.at(hour_minute).do(send_ctx, channel,
-                                                                      f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                      f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
         elif weekday == "fri":
             rdict[rid] = schedule.every().friday.at(hour_minute).do(send_ctx, channel,
-                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
         elif weekday == "sat":
             rdict[rid] = schedule.every().saturday.at(hour_minute).do(send_ctx, channel,
-                                                                      f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                      f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
         elif weekday == "sun":
             rdict[rid] = schedule.every().sunday.at(hour_minute).do(send_ctx, channel,
-                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
     elif r_type == "daily":
         rtext = rtext
         rdict[rid] = schedule.every().day.at(hour_minute).do(send_ctx, channel,
-                                                             f"Remind for <@{authorid}>: {rtext}! (id = {rid})")
+                                                             f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
     logger.debug(f"Loaded remind {rid}")
 
 
-def send_ctx(ctx, message):
-    asyncio.ensure_future(ctx.send(message))
+def send_ctx(ctx, message, rid):
+    if rep_count[rid] != 0:
+        asyncio.ensure_future(ctx.send(message))
+        if rep_count[rid] > 0:
+            rep_count[rid] -=1
+    else:
+        db_sess.query(Remind).filter(Remind.id == rid).delete()
+        db_sess.commit()
+        rdict.pop(rid)
+        rep_count.pop(rid)
+        return schedule.CancelJob
 
 
 @bot.event
@@ -68,6 +78,7 @@ async def on_ready():
     all_rems = db_sess.query(Remind).all()
     for remind in all_rems:
         weekday = remind.day
+        rep_count[remind.id] = remind.reps
         rtext = remind.text
         channel = discord.utils.get(bot.get_all_channels(), guild__name=remind.guild, name=remind.channel)
         load_rem(remind.r_type, remind.id, remind.time, remind.userid, rtext, channel, weekday)
@@ -94,6 +105,14 @@ async def new_remind(ctx, day_month, hour_minute, *rltext):
 @bot.command(name="weekly")
 async def weekly_remind(ctx, weekday, hour_minute, *rltext):
     global all_rems
+    global rep_count
+    rep = -1
+    for word in rltext:
+        if word[:4:] == "rep=":
+            try:
+                rep = int(word[4::])
+            except Exception:
+                pass
     rtext = " ".join(rltext)
     rem = Remind()
     rem.r_type = "weekly"
@@ -103,11 +122,13 @@ async def weekly_remind(ctx, weekday, hour_minute, *rltext):
     rem.text = rtext
     rem.channel = ctx.channel.name
     rem.guild = ctx.guild.name
+    rem.reps = rep
     db_sess.add(rem)
     db_sess.commit()
     all_rems = db_sess.query(Remind).all()
     remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id).first()
     load_rem(remind.r_type, remind.id, remind.time, remind.userid, rtext, ctx.channel, weekday)
+    rep_count[remind.id] = rep
     logger.info(f"New weekly remind {remind.id}")
     await ctx.send(f"Remind for <@{ctx.message.author.id}> set: {rtext} everyday at {hour_minute}. (id = {remind.id})")
 
@@ -115,6 +136,14 @@ async def weekly_remind(ctx, weekday, hour_minute, *rltext):
 @bot.command(name="daily")
 async def daily_remind(ctx, hour_minute, *rltext):
     global all_rems
+    global rep_count
+    rep = -1
+    for word in rltext:
+        if word[:4:] == "rep=":
+            try:
+                rep = int(word[4::])
+            except Exception:
+                pass
     rtext = " ".join(rltext)
     rem = Remind()
     rem.r_type = "daily"
@@ -124,13 +153,15 @@ async def daily_remind(ctx, hour_minute, *rltext):
     rem.text = rtext
     rem.channel = ctx.channel.name
     rem.guild = ctx.guild.name
+    rem.reps = rep
     db_sess.add(rem)
     db_sess.commit()
     all_rems = db_sess.query(Remind).all()
     remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id).first()
+    rep_count[remind.id] = rep
     logger.info(f"New daily remind {remind.id}")
     rdict[remind.id] = schedule.every().day.at(hour_minute).do(send_ctx, ctx,
-                                                               f"Reminder for <@{ctx.message.author.id}>: {rtext}!")
+                                                               f"Reminder for <@{ctx.message.author.id}>: {rtext}!", remind.id)
     await ctx.send(f"Remind for <@{ctx.message.author.id}> set: {rtext} everyday at {hour_minute}. (id = {remind.id})")
 
 

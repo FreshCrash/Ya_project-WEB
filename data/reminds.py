@@ -15,3 +15,4 @@ class Remind(SqlAlchemyBase):
     userid = sqlalchemy.Column(sqlalchemy.Integer, nullable=True)
     channel = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     guild = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+    reps = sqlalchemy.Column(sqlalchemy.Integer)
