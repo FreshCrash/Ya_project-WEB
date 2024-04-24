@@ -6,6 +6,7 @@ import logging
 import datetime
 from data import db_session
 from data.reminds import Remind
+import time
 
 db_session.global_init("db/reminds.db")
 db_sess = db_session.create_session()
@@ -54,16 +55,27 @@ def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
 
     elif r_type == "daily":
         day_of_week = schedule.every().day
-
-    rdict[rid] = day_of_week.at(hour_minute).do(send_ctx, channel, f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
-    logger.debug(f"Loaded remind {rid}")
+    if r_type != "custom":
+        try:
+            rdict[rid] = day_of_week.at(hour_minute).do(send_ctx, channel,
+                                                        f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            logger.debug(f"Loaded remind {rid}")
+        except Exception:
+            db_sess.query(Remind).filter(Remind.id == rid).delete()
+            db_sess.commit()
+            logger.error(f"Invalid time format of remind {rid}. Remind removed")
+    else:
+        rdict[rid] = schedule.every(int(hour_minute)).seconds.do(send_ctx, channel,
+                                                                 f"Remind for <@{authorid}>: {rtext}! (id = {rid})",
+                                                                 rid)
+        logger.debug("Loaded custom remind")
 
 
 def send_ctx(ctx, message, rid):
     if rep_count[rid] != 0:
         asyncio.ensure_future(ctx.send(message))
         if rep_count[rid] > 0:
-            rep_count[rid] -=1
+            rep_count[rid] -= 1
     else:
         db_sess.query(Remind).filter(Remind.id == rid).delete()
         db_sess.commit()
@@ -138,13 +150,16 @@ async def daily_remind(ctx, hour_minute, *rltext):
     global all_rems
     global rep_count
     rep = -1
+    rttext = []
     for word in rltext:
         if word[:4:] == "rep=":
             try:
                 rep = int(word[4::])
             except Exception:
-                pass
-    rtext = " ".join(rltext)
+                rttext.append(word)
+        else:
+            rttext.append(word)
+    rtext = " ".join(rttext)
     rem = Remind()
     rem.r_type = "daily"
     rem.day = "every"
@@ -161,8 +176,68 @@ async def daily_remind(ctx, hour_minute, *rltext):
     rep_count[remind.id] = rep
     logger.info(f"New daily remind {remind.id}")
     rdict[remind.id] = schedule.every().day.at(hour_minute).do(send_ctx, ctx,
-                                                               f"Reminder for <@{ctx.message.author.id}>: {rtext}!", remind.id)
+                                                               f"Reminder for <@{ctx.message.author.id}>: {rtext}!",
+                                                               remind.id)
     await ctx.send(f"Remind for <@{ctx.message.author.id}> set: {rtext} everyday at {hour_minute}. (id = {remind.id})")
+
+
+@bot.command(name="custom")
+async def custom_remind(ctx, *args):
+    global all_rems
+    rttext = []
+    days = 0
+    hours = 0
+    minutes = 0
+    seconds = 0
+    rep = -1
+    for arg in args:
+        if arg[-1] == "d":
+            try:
+                days = int(arg[:-1:])
+            except Exception:
+                rttext.append(arg)
+        elif arg[-1] == "h":
+            try:
+                hours = int(arg[:-1:])
+            except Exception:
+                rttext.append(arg)
+        elif arg[-1] == "m":
+            try:
+                minutes = int(arg[:-1:])
+            except Exception:
+                rttext.append(arg)
+        elif arg[-1] == "s":
+            try:
+                seconds = int(arg[:-1:])
+            except Exception:
+                rttext.append(arg)
+        elif arg[:4:] == "rep=":
+            try:
+                rep = int(arg[4::])
+            except Exception:
+                rttext.append(arg)
+        else:
+            rttext.append(arg)
+    rtext = " ".join(rttext)
+    total_seconds = (days * 86400) + (hours * 3600) + (minutes * 60) + seconds
+    rem = Remind()
+    rem.r_type = "custom"
+    rem.day = None
+    rem.userid = ctx.message.author.id
+    rem.time = total_seconds
+    rem.text = rtext
+    rem.channel = ctx.channel.name
+    rem.guild = ctx.guild.name
+    rem.reps = rep
+    db_sess.add(rem)
+    db_sess.commit()
+    all_rems = db_sess.query(Remind).all()
+    remind = db_sess.query(Remind).filter(Remind.text == rtext and Remind.userid == ctx.message.author.id).first()
+    rep_count[remind.id] = rep
+    logger.info(f"New custom remind {remind.id}")
+    load_rem("custom", remind.id, total_seconds, remind.userid, rtext, ctx, None)
+    await ctx.send(
+        f"New custom remind for <@{remind.userid}>: {rtext}, every {days} days, {hours} hours, {minutes} minutes and {seconds} seconds.")
 
 
 @bot.command(name="delete")
@@ -194,6 +269,27 @@ async def listrems(ctx):
             await ctx.send(f"{remind.text} every {remind.day} at {remind.time}. ID = {remind.id}")
         elif remind.r_type == "daily":
             await ctx.send(f"{remind.text} everyday at {remind.time}. ID = {remind.id}")
+        elif remind.r_type == "custom":
+            await ctx.send(
+                f"{remind.text} every {time.strftime('%dd, %H:%M:%S', time.gmtime(int(remind.time)))}. ID = {remind.id}")
+
+
+@bot.command(name="help")
+async def help(ctx):
+    await ctx.send(f"This is a reminder bot."
+                   f"\nCommands:\n1.Remind. It reminds you about something once. "
+                   f"Format: !remind [day].[month] [hour]:[minute] [text]"
+                   f". Example: !remind 12.04 19:20 feed my cat.\n"
+                   f"2.Weekly. Sets a weekly remind. Format: !weekly [day(3-letter)] [hour]:[minute] [text]. "
+                   f"Example: !weekly fri 12:33 feed my cat.\n"
+                   f"3.Daily. Sets a daily remind. Format: !daily [hour]:[minute] [text]. "
+                   f"Example: !daily 15:30 say hi\n"
+                   f"4.custom. Sets a remind with custom interval. "
+                   f"This command has no exact format, you can insert your interval anywhere in the command. "
+                   f"Examples: !custom 10s test, !custom 15m test2, !custom 3d 12 h test3\n"
+                   f"6.Delete. Deletes a remind Format: !delete id. Example: !delete 1.\n"
+                   f"7.My reminds. This command returns you list of your reminds. Format: !my_reminds.\n"
+                   f"Also you can insert rep=[repeats] to repeat your remind as many times as you want.")
 
 
 TOKEN = open("token.txt").readline()
