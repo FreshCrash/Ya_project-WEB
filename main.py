@@ -29,33 +29,33 @@ rep_count = {}
 
 
 def load_rem(r_type, rid, hour_minute, authorid, rtext, channel, weekday):
+    global all_rems
     if r_type == "weekly":
 
         if weekday == "mon":
-            rdict[rid] = schedule.every().monday.at(hour_minute).do(send_ctx, channel,
-                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().monday
         elif weekday == "tue":
-            rdict[rid] = schedule.every().tuesday.at(hour_minute).do(send_ctx, channel,
-                                                                     f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().tuesday
+
         elif weekday == "wed":
-            rdict[rid] = schedule.every().wednesday.at(hour_minute).do(send_ctx, channel,
-                                                                       f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().wednesday
+
         elif weekday == "thu":
-            rdict[rid] = schedule.every().thursday.at(hour_minute).do(send_ctx, channel,
-                                                                      f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().thursday
+
         elif weekday == "fri":
-            rdict[rid] = schedule.every().friday.at(hour_minute).do(send_ctx, channel,
-                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().friday
+
         elif weekday == "sat":
-            rdict[rid] = schedule.every().saturday.at(hour_minute).do(send_ctx, channel,
-                                                                      f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().saturday
+
         elif weekday == "sun":
-            rdict[rid] = schedule.every().sunday.at(hour_minute).do(send_ctx, channel,
-                                                                    f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+            day_of_week = schedule.every().sunday
+
     elif r_type == "daily":
-        rtext = rtext
-        rdict[rid] = schedule.every().day.at(hour_minute).do(send_ctx, channel,
-                                                             f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
+        day_of_week = schedule.every().day
+
+    all_rems[rid] = day_of_week.at(hour_minute).do(send_ctx, channel, f"Remind for <@{authorid}>: {rtext}! (id = {rid})", rid)
     logger.debug(f"Loaded remind {rid}")
 
 
